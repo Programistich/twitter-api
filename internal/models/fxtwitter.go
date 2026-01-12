@@ -117,13 +117,22 @@ type Photo struct {
 
 // Video represents a video attachment
 type Video struct {
-	URL          string   `json:"url"`
-	ThumbnailURL string   `json:"thumbnail_url"`
-	Width        int      `json:"width"`
-	Height       int      `json:"height"`
-	Format       string   `json:"format,omitempty"`
-	Duration     *float64 `json:"duration,omitempty"`
-	Type         string   `json:"type,omitempty"`
+	URL          string        `json:"url"`
+	ThumbnailURL string        `json:"thumbnail_url"`
+	Width        int           `json:"width"`
+	Height       int           `json:"height"`
+	Format       string        `json:"format,omitempty"`
+	Duration     *float64      `json:"duration,omitempty"`
+	Type         string        `json:"type,omitempty"`
+	Formats      []VideoFormat `json:"formats,omitempty"`
+}
+
+// VideoFormat represents a video variant with specific quality/bitrate
+type VideoFormat struct {
+	URL       string `json:"url"`
+	Bitrate   int    `json:"bitrate,omitempty"`
+	Container string `json:"container,omitempty"`
+	Codec     string `json:"codec,omitempty"`
 }
 
 // MosaicInfo represents mosaic layout information for multiple photos
