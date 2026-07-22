@@ -85,7 +85,7 @@ jobs:
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           model: ${{ vars.PULLFROG_MODEL }}
           push: disabled
-          status_checks: true
+          status_checks: enabled
           timeout: 30m
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
