@@ -3,12 +3,6 @@ name: Pullfrog Review
 on:
   pull_request:
     types: [opened, synchronize]
-  workflow_dispatch:
-    inputs:
-      prompt:
-        description: Manual run with a custom prompt (for testing)
-        type: string
-        required: true
 
 permissions:
   # pullfrog mints its short-lived tokens via OIDC and refuses to run
@@ -22,23 +16,19 @@ permissions:
   statuses: write
 
 concurrency:
-  group: pullfrog-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: pullfrog-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   review:
-    # Runs on: manual dispatch, or every push to a PR from this repo's own
-    # branches (fork PRs get no secrets, so they are skipped).
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request'
-        && github.event.pull_request.head.repo.full_name == github.repository)
+    # Fork PRs get no secrets and a read-only token, so they are skipped.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       # PR title/body never enter the prompt — the agent reads PR context
@@ -46,21 +36,11 @@ jobs:
       # instructions via the prompt.
       - name: Build prompt
         id: build_prompt
-        env:
-          MANUAL_PROMPT: ${{ inputs.prompt }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           {
             echo "prompt<<PULLFROG_EOF"
-            case "${{ github.event_name }}" in
-              workflow_dispatch)
-                echo "$MANUAL_PROMPT"
-                ;;
-              pull_request)
-                echo "Review pull request #$PR_NUMBER in ${{ github.repository }}."
-                echo "Fetch the PR diff and description via the GitHub API, review the changes for bugs, logic errors, and design problems, and leave a PR review with inline comments on specific problem areas. Do not push any commits."
-                ;;
-            esac
+            echo "Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}."
+            echo "Fetch the PR diff and description via the GitHub API, review the changes for bugs, logic errors, and design problems, and leave a PR review with inline comments on specific problem areas. Do not push any commits."
             echo "PULLFROG_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -73,4 +53,7 @@ jobs:
           status_checks: enabled
           timeout: 30m
         env:
+          # Claude subscription token is preferred; OPENAI_API_KEY stays as a
+          # fallback when subscription limits are exhausted (401/429)
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
