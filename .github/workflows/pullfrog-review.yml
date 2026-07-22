@@ -11,6 +11,9 @@ on:
         required: true
 
 permissions:
+  # pullfrog mints its short-lived tokens via OIDC and refuses to run
+  # without id-token: write at the job level
+  id-token: write
   contents: read
   pull-requests: write
   issues: write
