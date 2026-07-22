@@ -1,0 +1,59 @@
+name: Pullfrog Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  # pullfrog mints its short-lived tokens via OIDC and refuses to run
+  # without id-token: write at the job level
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+  checks: read
+  statuses: write
+
+concurrency:
+  group: pullfrog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Fork PRs get no secrets and a read-only token, so they are skipped.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      # PR title/body never enter the prompt — the agent reads PR context
+      # itself through the GitHub API, so untrusted text can't inject
+      # instructions via the prompt.
+      - name: Build prompt
+        id: build_prompt
+        run: |
+          {
+            echo "prompt<<PULLFROG_EOF"
+            echo "Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}."
+            echo "Fetch the PR diff and description via the GitHub API, review the changes for bugs, logic errors, and design problems, and leave a PR review with inline comments on specific problem areas. Do not push any commits."
+            echo "PULLFROG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run pullfrog
+        uses: pullfrog/pullfrog@a2f676bdf8f86e4177f60c84b3e125c1c88b4076 # v0.1.38
+        with:
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          model: ${{ vars.PULLFROG_MODEL }}
+          push: disabled
+          status_checks: enabled
+          timeout: 30m
+        env:
+          # Claude subscription token is preferred; OPENAI_API_KEY stays as a
+          # fallback when subscription limits are exhausted (401/429)
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
