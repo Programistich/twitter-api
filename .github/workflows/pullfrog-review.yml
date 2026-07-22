@@ -2,7 +2,7 @@ name: Pullfrog Review
 
 on:
   pull_request:
-    types: [review_requested, opened, synchronize]
+    types: [opened, synchronize]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -29,16 +29,14 @@ concurrency:
 
 jobs:
   review:
-    # Runs on: manual dispatch; review requested from the dedicated bot
-    # account (vars.PULLFROG_REVIEWER); PR opened/updated when
-    # vars.PULLFROG_AUTO_REVIEW is 'true'; or a trigger-phrase mention in a
-    # comment — collaborators only, so strangers can't spend the API budget.
+    # Runs on: manual dispatch; every push to a PR from this repo's own
+    # branches (fork PRs get no secrets, so they are skipped); or a
+    # trigger-phrase mention in a comment — collaborators only, so
+    # strangers can't spend the API budget.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.action == 'review_requested'
-        && github.event.requested_reviewer.login == vars.PULLFROG_REVIEWER) ||
-      (github.event_name == 'pull_request' && github.event.action != 'review_requested'
-        && vars.PULLFROG_AUTO_REVIEW == 'true') ||
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'issue_comment'
         && contains(github.event.comment.body, vars.PULLFROG_TRIGGER_PHRASE)
         && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
