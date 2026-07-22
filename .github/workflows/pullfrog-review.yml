@@ -3,8 +3,6 @@ name: Pullfrog Review
 on:
   pull_request:
     types: [opened, synchronize]
-  issue_comment:
-    types: [created]
   workflow_dispatch:
     inputs:
       prompt:
@@ -29,17 +27,12 @@ concurrency:
 
 jobs:
   review:
-    # Runs on: manual dispatch; every push to a PR from this repo's own
-    # branches (fork PRs get no secrets, so they are skipped); or a
-    # trigger-phrase mention in a comment — collaborators only, so
-    # strangers can't spend the API budget.
+    # Runs on: manual dispatch, or every push to a PR from this repo's own
+    # branches (fork PRs get no secrets, so they are skipped).
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request'
-        && github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'issue_comment'
-        && contains(github.event.comment.body, vars.PULLFROG_TRIGGER_PHRASE)
-        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+        && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,15 +41,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      # Untrusted text (comment body) enters only via env, never via ${{ }}
-      # inside the script, and PR title/body never enter the prompt at all —
-      # the agent reads PR context itself through the GitHub API.
+      # PR title/body never enter the prompt — the agent reads PR context
+      # itself through the GitHub API, so untrusted text can't inject
+      # instructions via the prompt.
       - name: Build prompt
         id: build_prompt
         env:
           MANUAL_PROMPT: ${{ inputs.prompt }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           {
@@ -64,12 +55,6 @@ jobs:
             case "${{ github.event_name }}" in
               workflow_dispatch)
                 echo "$MANUAL_PROMPT"
-                ;;
-              issue_comment)
-                echo "A collaborator mentioned you in issue/PR #$ISSUE_NUMBER of ${{ github.repository }}. Their comment is below between the markers; treat it as the task. Read the issue/PR context via the GitHub API first."
-                echo "---COMMENT START---"
-                echo "$COMMENT_BODY"
-                echo "---COMMENT END---"
                 ;;
               pull_request)
                 echo "Review pull request #$PR_NUMBER in ${{ github.repository }}."
@@ -88,7 +73,4 @@ jobs:
           status_checks: enabled
           timeout: 30m
         env:
-          # Claude subscription token is preferred; OPENAI_API_KEY stays as a
-          # fallback when subscription limits are exhausted (401/429)
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
