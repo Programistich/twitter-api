@@ -83,7 +83,7 @@ jobs:
         uses: pullfrog/pullfrog@a2f676bdf8f86e4177f60c84b3e125c1c88b4076 # v0.1.38
         with:
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          model: openai/gpt-mini
+          model: ${{ vars.PULLFROG_MODEL }}
           push: disabled
           status_checks: true
           timeout: 30m
