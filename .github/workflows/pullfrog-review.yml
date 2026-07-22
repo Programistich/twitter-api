@@ -1,0 +1,64 @@
+name: Pullfrog Review
+
+on:
+  pull_request:
+    types: [review_requested]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Manual run with a custom prompt (for testing)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+  checks: read
+
+concurrency:
+  group: pullfrog-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Runs only when review is requested from the dedicated bot account
+    # (vars.PULLFROG_REVIEWER), or on a manual workflow_dispatch smoke test.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.requested_reviewer.login == vars.PULLFROG_REVIEWER
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      # Only the PR number goes into the prompt — never the PR title/body,
+      # so untrusted PR text cannot inject instructions into the agent.
+      - name: Build prompt
+        id: build_prompt
+        env:
+          MANUAL_PROMPT: ${{ inputs.prompt }}
+        run: |
+          {
+            echo "prompt<<PULLFROG_EOF"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "$MANUAL_PROMPT"
+            else
+              echo "Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}."
+              echo "Fetch the PR diff and description via the GitHub API, review the changes for bugs, logic errors, and design problems, and leave a PR review with inline comments on specific problem areas. Do not push any commits."
+            fi
+            echo "PULLFROG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run pullfrog review
+        uses: pullfrog/pullfrog@v0
+        with:
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          model: openai/gpt-mini
+          push: disabled
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
